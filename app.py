@@ -38,6 +38,7 @@ except ImportError as e:
         raise
 
 app = Flask(__name__)
+application = app
 app.secret_key = os.environ.get('APP_SECRET_KEY') or secrets.token_hex(32)
 
 # Flask-WTF / CSRF configuration (professional defaults)
@@ -56,14 +57,18 @@ csrf = CSRFProtect(app)
 app.jinja_env.globals['csrf_token'] = generate_csrf
 
 db_config = {
-    "host": os.environ.get('DB_HOST') or os.environ.get('MYSQLHOST', 'localhost'),
-    "user": os.environ.get('DB_USER') or os.environ.get('MYSQLUSER', 'root'),
-    "password": os.environ.get('DB_PASSWORD') or os.environ.get('MYSQLPASSWORD', ''),
-    "database": os.environ.get('DB_NAME') or os.environ.get('MYSQLDATABASE', 'customs_portal'),
-    "port": int(os.environ.get('DB_PORT') or os.environ.get('MYSQLPORT', '3306')),
-    "connection_timeout": int(os.environ.get('DB_CONNECTION_TIMEOUT', '5')),
+    "host": os.environ.get('DB_HOST') or os.environ.get('MYSQLHOST') or '',
+    "user": os.environ.get('DB_USER') or os.environ.get('MYSQLUSER') or '',
+    "password": os.environ.get('DB_PASSWORD') or os.environ.get('MYSQLPASSWORD') or '',
+    "database": os.environ.get('DB_NAME') or os.environ.get('MYSQLDATABASE') or '',
+    "port": int((os.environ.get('DB_PORT') or os.environ.get('MYSQLPORT') or '3306').strip() or '3306'),
+    "connection_timeout": int((os.environ.get('DB_CONNECTION_TIMEOUT') or '5').strip() or '5'),
     "autocommit": False
 }
+
+
+def has_valid_db_config():
+    return bool(db_config.get('host') and db_config.get('user'))
 
 try:
     from hr_db import init_hr_db
@@ -80,6 +85,11 @@ def safe_schema_bootstrap(label, bootstrap_fn):
 
 
 def get_db_connection():
+    if not has_valid_db_config():
+        raise RuntimeError(
+            "Database configuration is incomplete. Set DB_HOST and DB_USER (or MYSQLHOST and MYSQLUSER) before starting the app."
+        )
+
     try:
         return mysql.connector.connect(**db_config)
     except Exception as e:
@@ -161,24 +171,32 @@ def ensure_user_login_tracking_columns():
         ('last_login_at', "ALTER TABLE users ADD COLUMN last_login_at DATETIME NULL AFTER status"),
         ('last_login_ip', "ALTER TABLE users ADD COLUMN last_login_ip VARCHAR(45) NULL AFTER last_login_at"),
     ]:
-        if has_column('users', column_name):
-            continue
-
-        conn = get_db_connection()
-        cur = conn.cursor()
         try:
-            cur.execute(ddl)
-            conn.commit()
-            schema_cache.pop(f"users.{column_name}", None)
-        except mysql.connector.Error as exc:
-            conn.rollback()
-            if exc.errno == 1060:
-                schema_cache[f"users.{column_name}"] = True
+            if has_column('users', column_name):
                 continue
-            raise
-        finally:
-            cur.close()
-            conn.close()
+        except Exception as exc:
+            print(f"[db] unable to check users.{column_name}: {exc}")
+            return
+
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            try:
+                cur.execute(ddl)
+                conn.commit()
+                schema_cache.pop(f"users.{column_name}", None)
+            except mysql.connector.Error as exc:
+                conn.rollback()
+                if exc.errno == 1060:
+                    schema_cache[f"users.{column_name}"] = True
+                    continue
+                raise
+            finally:
+                cur.close()
+                conn.close()
+        except Exception as exc:
+            print(f"[db] unable to ensure users.{column_name}: {exc}")
+            return
 
 
 def get_user_permissions():
@@ -186,31 +204,35 @@ def get_user_permissions():
     if not username:
         return set()
 
-    conn = get_db_connection()
-    cur = conn.cursor(dictionary=True)
     try:
-        cur.execute("""
-            SELECT DISTINCT p.permission_key
-            FROM users u
-            LEFT JOIN user_permissions up ON up.user_id = u.id AND up.allow_access = 1
-            LEFT JOIN permissions p ON p.id = up.permission_id
-            LEFT JOIN role_permissions rp ON rp.role_id = u.role_id
-            LEFT JOIN permissions rp_p ON rp_p.id = rp.permission_id
-            WHERE u.username = %s
-        """, (username,))
-        rows = cur.fetchall() or []
+        conn = get_db_connection()
+        cur = conn.cursor(dictionary=True)
+        try:
+            cur.execute("""
+                SELECT DISTINCT p.permission_key
+                FROM users u
+                LEFT JOIN user_permissions up ON up.user_id = u.id AND up.allow_access = 1
+                LEFT JOIN permissions p ON p.id = up.permission_id
+                LEFT JOIN role_permissions rp ON rp.role_id = u.role_id
+                LEFT JOIN permissions rp_p ON rp_p.id = rp.permission_id
+                WHERE u.username = %s
+            """, (username,))
+            rows = cur.fetchall() or []
 
-        permissions = {row['permission_key'] for row in rows if row.get('permission_key')}
+            permissions = {row['permission_key'] for row in rows if row.get('permission_key')}
 
-        cur.execute("SELECT r.name FROM users u JOIN roles r ON r.id = u.role_id WHERE u.username = %s LIMIT 1", (username,))
-        role = cur.fetchone()
-        if role and role.get('name') == 'Admin':
-            permissions.add('admin')
+            cur.execute("SELECT r.name FROM users u JOIN roles r ON r.id = u.role_id WHERE u.username = %s LIMIT 1", (username,))
+            role = cur.fetchone()
+            if role and role.get('name') == 'Admin':
+                permissions.add('admin')
 
-        return permissions
-    finally:
-        cur.close()
-        conn.close()
+            return permissions
+        finally:
+            cur.close()
+            conn.close()
+    except Exception as exc:
+        print(f"[db] permission lookup failed for {username}: {exc}")
+        return set()
 
 
 def has_permission(permission_key):
@@ -234,20 +256,25 @@ def has_column(table, column):
     if key in schema_cache:
         return schema_cache[key]
 
-    conn = get_db_connection()
-    cur = conn.cursor()
     try:
-        cur.execute(
-            "SELECT COUNT(*) FROM information_schema.columns "
-            "WHERE table_schema=%s AND table_name=%s AND column_name=%s",
-            (db_config["database"], table, column)
-        )
-        exists = cur.fetchone()[0] == 1
-        schema_cache[key] = exists
-        return exists
-    finally:
-        cur.close()
-        conn.close()
+        conn = get_db_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute(
+                "SELECT COUNT(*) FROM information_schema.columns "
+                "WHERE table_schema=%s AND table_name=%s AND column_name=%s",
+                (db_config["database"], table, column)
+            )
+            exists = cur.fetchone()[0] == 1
+            schema_cache[key] = exists
+            return exists
+        finally:
+            cur.close()
+            conn.close()
+    except Exception as exc:
+        print(f"[db] unable to inspect column {table}.{column}: {exc}")
+        schema_cache[key] = False
+        return False
 
 
 def normalize_department_key(value):
@@ -573,34 +600,47 @@ def enforce_permission_checks():
 # ======================
 @app.route("/", methods=["GET", "POST"])
 def login():
-    ensure_user_login_tracking_columns()
+    try:
+        ensure_user_login_tracking_columns()
+    except Exception as exc:
+        print(f"[db] login schema check skipped: {exc}")
 
     if request.method == "POST":
         username = request.form["username"]
         password = request.form["password"]
 
-        conn = mysql.connector.connect(**db_config)
-        cur = conn.cursor(dictionary=True)
-        cur.execute("SELECT * FROM users WHERE username=%s AND status='active'", (username,))
-        user = cur.fetchone()
-        cur.close()
-        conn.close()
+        if not has_valid_db_config():
+            return render_template("login.html", error="تعذر الاتصال بقاعدة البيانات حالياً. تحقق من متغيرات البيئة DB_HOST و DB_USER.")
+
+        try:
+            conn = mysql.connector.connect(**db_config)
+            cur = conn.cursor(dictionary=True)
+            cur.execute("SELECT * FROM users WHERE username=%s AND status='active'", (username,))
+            user = cur.fetchone()
+            cur.close()
+            conn.close()
+        except Exception as exc:
+            print(f"[db] login query failed: {exc}")
+            return render_template("login.html", error="تعذر الاتصال بقاعدة البيانات حالياً. تحقق من إعدادات خادم MySQL في Railway.")
 
         if user and check_password_hash(user["password_hash"], password):
             session["user"] = user["username"]
             ip_details = get_client_ip_details()
             ip_address = ip_details['external_ip'] or ip_details['local_ip'] or 'unknown'
-            conn = get_db_connection()
-            cur = conn.cursor()
             try:
-                cur.execute(
-                    "UPDATE users SET last_login_at=NOW(), last_login_ip=%s WHERE id=%s",
-                    (ip_address, user["id"])
-                )
-                conn.commit()
-            finally:
-                cur.close()
-                conn.close()
+                conn = get_db_connection()
+                cur = conn.cursor()
+                try:
+                    cur.execute(
+                        "UPDATE users SET last_login_at=NOW(), last_login_ip=%s WHERE id=%s",
+                        (ip_address, user["id"])
+                    )
+                    conn.commit()
+                finally:
+                    cur.close()
+                    conn.close()
+            except Exception as exc:
+                print(f"[db] login tracking update failed: {exc}")
             return redirect("/dashboard")
         else:
             return render_template("login.html", error="بيانات الدخول غير صحيحة")
