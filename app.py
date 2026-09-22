@@ -363,23 +363,40 @@ def build_department_items_path(department):
 
 
 def ensure_item_department_column():
-    if has_column('items', 'department'):
-        return
-
-    conn = get_db_connection()
-    cur = conn.cursor()
     try:
-        cur.execute(
-            "ALTER TABLE items ADD COLUMN department VARCHAR(50) NOT NULL DEFAULT 'local_purchases' AFTER item_type"
-        )
-        conn.commit()
-    except mysql.connector.Error as exc:
-        conn.rollback()
-        if exc.errno != 1060:
-            raise
-    finally:
-        cur.close()
-        conn.close()
+        conn = get_db_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT 1 FROM items LIMIT 1")
+        except Exception as exc:
+            print(f"Database warning/error: {exc}")
+            return
+        finally:
+            cur.close()
+            conn.close()
+
+        if has_column('items', 'department'):
+            return
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute(
+                "ALTER TABLE items ADD COLUMN department VARCHAR(50) NOT NULL DEFAULT 'local_purchases' AFTER item_type"
+            )
+            conn.commit()
+        except Exception as exc:
+            print(f"Database warning/error: {exc}")
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        finally:
+            cur.close()
+            conn.close()
+    except Exception as exc:
+        print(f"Database warning/error: {exc}")
+        pass
 
 
 def ensure_companies_table():
