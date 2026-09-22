@@ -4,10 +4,11 @@ import os
 SQL_FILE = os.path.join(os.path.dirname(__file__), 'migrations', '003_hr_egypt_rates_mysql.sql')
 
 db_config = {
-    'host': 'localhost',
-    'user': 'root',
-    'password': 'Hazem@2026',
-    'database': 'customs_portal'
+    'host': os.environ.get('DB_HOST') or os.environ.get('MYSQLHOST') or 'localhost',
+    'user': os.environ.get('DB_USER') or os.environ.get('MYSQLUSER') or 'root',
+    'password': os.environ.get('DB_PASSWORD') or os.environ.get('MYSQLPASSWORD') or '',
+    'database': os.environ.get('DB_NAME') or os.environ.get('MYSQLDATABASE') or 'customs_portal',
+    'port': int(os.environ.get('DB_PORT') or os.environ.get('MYSQLPORT') or '3306')
 }
 
 if not os.path.exists(SQL_FILE):

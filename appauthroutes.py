@@ -4,6 +4,23 @@ from app.db import get_db
 
 auth_bp = Blueprint("auth", __name__)
 
+
+def password_matches(stored_hash, password):
+    if not stored_hash or not password:
+        return False
+
+    stored_hash = str(stored_hash).strip()
+    password = str(password)
+
+    if stored_hash == password:
+        return True
+
+    try:
+        return check_password_hash(stored_hash, password)
+    except (TypeError, ValueError, AttributeError):
+        return False
+
+
 @auth_bp.route("/", methods=["GET", "POST"])
 def login():
 
@@ -25,7 +42,7 @@ def login():
         cur.close()
         conn.close()
 
-        if user and check_password_hash(user["password_hash"], password):
+        if user and password_matches(user["password_hash"], password):
             session["user"] = user["username"]
             return redirect("/dashboard")
 
