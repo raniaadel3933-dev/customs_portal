@@ -215,28 +215,32 @@ def get_client_ip_details():
 
 
 def ensure_user_login_tracking_columns():
-    for column_name, ddl in [
-        ('last_login_at', "ALTER TABLE users ADD COLUMN last_login_at DATETIME NULL AFTER status"),
-        ('last_login_ip', "ALTER TABLE users ADD COLUMN last_login_ip VARCHAR(45) NULL AFTER last_login_at"),
-    ]:
-        if has_column('users', column_name):
-            continue
-
-        conn = get_db_connection()
-        cur = conn.cursor()
-        try:
-            cur.execute(ddl)
-            conn.commit()
-            schema_cache.pop(f"users.{column_name}", None)
-        except mysql.connector.Error as exc:
-            conn.rollback()
-            if exc.errno == 1060:
-                schema_cache[f"users.{column_name}"] = True
+    try:
+        for column_name, ddl in [
+            ('last_login_at', "ALTER TABLE users ADD COLUMN last_login_at DATETIME NULL AFTER status"),
+            ('last_login_ip', "ALTER TABLE users ADD COLUMN last_login_ip VARCHAR(45) NULL AFTER last_login_at"),
+        ]:
+            if has_column('users', column_name):
                 continue
-            raise
-        finally:
-            cur.close()
-            conn.close()
+
+            conn = get_db_connection()
+            cur = conn.cursor()
+            try:
+                cur.execute(ddl)
+                conn.commit()
+                schema_cache.pop(f"users.{column_name}", None)
+            except mysql.connector.Error as exc:
+                conn.rollback()
+                if exc.errno == 1060:
+                    schema_cache[f"users.{column_name}"] = True
+                    continue
+                raise
+            finally:
+                cur.close()
+                conn.close()
+    except Exception as exc:
+        print(f"Database warning/error: {exc}")
+        pass
 
 
 def get_user_permissions():
@@ -400,107 +404,120 @@ def ensure_item_department_column():
 
 
 def ensure_companies_table():
-    conn = get_db_connection()
-    cur = conn.cursor()
     try:
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS companies (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                company_code VARCHAR(50) NOT NULL UNIQUE,
-                company_name VARCHAR(255) NOT NULL,
-                contact_person VARCHAR(255) NULL,
-                contact_title VARCHAR(150) NULL,
-                phone VARCHAR(50) NULL,
-                alternate_phone VARCHAR(50) NULL,
-                whatsapp VARCHAR(50) NULL,
-                email VARCHAR(255) NULL,
-                alternate_email VARCHAR(255) NULL,
-                website VARCHAR(255) NULL,
-                address VARCHAR(500) NULL,
-                city VARCHAR(100) NULL,
-                country VARCHAR(100) NULL,
-                tax_number VARCHAR(100) NULL,
-                commercial_register VARCHAR(100) NULL,
-                activity VARCHAR(255) NULL,
-                specialization VARCHAR(255) NULL,
-                notes TEXT NULL,
-                status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
-                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-        """)
-        for column_name, column_definition in (
-            ('alternate_email', 'VARCHAR(255) NULL AFTER email'),
-            ('specialization', 'VARCHAR(255) NULL AFTER activity'),
-        ):
-            if not has_column('companies', column_name):
-                cur.execute(
-                    f"ALTER TABLE companies ADD COLUMN {column_name} {column_definition}"
-                )
-        conn.commit()
-    finally:
-        cur.close()
-        conn.close()
+        conn = get_db_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS companies (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    company_code VARCHAR(50) NOT NULL UNIQUE,
+                    company_name VARCHAR(255) NOT NULL,
+                    contact_person VARCHAR(255) NULL,
+                    contact_title VARCHAR(150) NULL,
+                    phone VARCHAR(50) NULL,
+                    alternate_phone VARCHAR(50) NULL,
+                    whatsapp VARCHAR(50) NULL,
+                    email VARCHAR(255) NULL,
+                    alternate_email VARCHAR(255) NULL,
+                    website VARCHAR(255) NULL,
+                    address VARCHAR(500) NULL,
+                    city VARCHAR(100) NULL,
+                    country VARCHAR(100) NULL,
+                    tax_number VARCHAR(100) NULL,
+                    commercial_register VARCHAR(100) NULL,
+                    activity VARCHAR(255) NULL,
+                    specialization VARCHAR(255) NULL,
+                    notes TEXT NULL,
+                    status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """)
+            for column_name, column_definition in (
+                ('alternate_email', 'VARCHAR(255) NULL AFTER email'),
+                ('specialization', 'VARCHAR(255) NULL AFTER activity'),
+            ):
+                if not has_column('companies', column_name):
+                    cur.execute(
+                        f"ALTER TABLE companies ADD COLUMN {column_name} {column_definition}"
+                    )
+            conn.commit()
+        finally:
+            cur.close()
+            conn.close()
+    except Exception as exc:
+        print(f"Database warning/error: {exc}")
+        pass
 
 
 def ensure_issue_voucher_reference_column():
-    columns = (
-        ('reference_no', 'VARCHAR(100) NULL AFTER voucher_no'),
-        ('service_type', 'VARCHAR(50) NULL AFTER reference_no'),
-        ('rental_company_id', 'INT NULL AFTER service_type'),
-    )
-    if all(has_column('issue_vouchers', column_name) for column_name, _ in columns):
-        return
-
-    conn = get_db_connection()
-    cur = conn.cursor()
     try:
-        for column_name, column_definition in columns:
-            if not has_column('issue_vouchers', column_name):
-                cur.execute(
-                    f"ALTER TABLE issue_vouchers ADD COLUMN {column_name} {column_definition}"
-                )
-        conn.commit()
-    except mysql.connector.Error as exc:
-        conn.rollback()
-        if exc.errno != 1060:
-            raise
-    finally:
-        cur.close()
-        conn.close()
+        columns = (
+            ('reference_no', 'VARCHAR(100) NULL AFTER voucher_no'),
+            ('service_type', 'VARCHAR(50) NULL AFTER reference_no'),
+            ('rental_company_id', 'INT NULL AFTER service_type'),
+        )
+        if all(has_column('issue_vouchers', column_name) for column_name, _ in columns):
+            return
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+        try:
+            for column_name, column_definition in columns:
+                if not has_column('issue_vouchers', column_name):
+                    cur.execute(
+                        f"ALTER TABLE issue_vouchers ADD COLUMN {column_name} {column_definition}"
+                    )
+            conn.commit()
+        except mysql.connector.Error as exc:
+            conn.rollback()
+            if exc.errno != 1060:
+                print(f"Database warning/error: {exc}")
+                return
+        finally:
+            cur.close()
+            conn.close()
+    except Exception as exc:
+        print(f"Database warning/error: {exc}")
+        pass
 
 
 def ensure_department_permissions():
-    permissions = (
-        ('department.dashboard.view', 'رؤية لوحة التحكم', 'الإدارات'),
-        ('department.balances.view', 'رؤية أرصدة الإدارات', 'الإدارات'),
-        ('department.local.view', 'رؤية المشتريات المحلية', 'الإدارات'),
-        ('department.external.view', 'رؤية المشتريات الخارجية', 'الإدارات'),
-        ('department.customs.view', 'رؤية إدارة الجمارك', 'الإدارات'),
-        ('department.users.view', 'رؤية إدارة المستخدمين', 'الإدارات'),
-        ('department.hr.view', 'رؤية شئون العاملين', 'الإدارات'),
-        ('department.payroll.view', 'رؤية إعدادات الرواتب', 'الإدارات'),
-        ('department.exchange.view', 'رؤية أسعار العملات', 'الإدارات'),
-        ('department.companies.view', 'رؤية دليل الشركات', 'الإدارات'),
-        ('department.reports.view', 'رؤية التقارير', 'الإدارات'),
-    )
-    conn = get_db_connection()
-    cur = conn.cursor()
     try:
-        for permission_key, permission_name, module_name in permissions:
-            cur.execute(
-                "SELECT id FROM permissions WHERE permission_key=%s LIMIT 1",
-                (permission_key,)
-            )
-            if not cur.fetchone():
+        permissions = (
+            ('department.dashboard.view', 'رؤية لوحة التحكم', 'الإدارات'),
+            ('department.balances.view', 'رؤية أرصدة الإدارات', 'الإدارات'),
+            ('department.local.view', 'رؤية المشتريات المحلية', 'الإدارات'),
+            ('department.external.view', 'رؤية المشتريات الخارجية', 'الإدارات'),
+            ('department.customs.view', 'رؤية إدارة الجمارك', 'الإدارات'),
+            ('department.users.view', 'رؤية إدارة المستخدمين', 'الإدارات'),
+            ('department.hr.view', 'رؤية شئون العاملين', 'الإدارات'),
+            ('department.payroll.view', 'رؤية إعدادات الرواتب', 'الإدارات'),
+            ('department.exchange.view', 'رؤية أسعار العملات', 'الإدارات'),
+            ('department.companies.view', 'رؤية دليل الشركات', 'الإدارات'),
+            ('department.reports.view', 'رؤية التقارير', 'الإدارات'),
+        )
+        conn = get_db_connection()
+        cur = conn.cursor()
+        try:
+            for permission_key, permission_name, module_name in permissions:
                 cur.execute(
-                    "INSERT INTO permissions (permission_key, permission_name, module_name) VALUES (%s, %s, %s)",
-                    (permission_key, permission_name, module_name)
+                    "SELECT id FROM permissions WHERE permission_key=%s LIMIT 1",
+                    (permission_key,)
                 )
-        conn.commit()
-    finally:
-        cur.close()
-        conn.close()
+                if not cur.fetchone():
+                    cur.execute(
+                        "INSERT INTO permissions (permission_key, permission_name, module_name) VALUES (%s, %s, %s)",
+                        (permission_key, permission_name, module_name)
+                    )
+            conn.commit()
+        finally:
+            cur.close()
+            conn.close()
+    except Exception as exc:
+        print(f"Database warning/error: {exc}")
+        pass
 
 
 try:
@@ -4426,47 +4443,55 @@ def seed_demo_customs_data():
 
 
 def ensure_customs_clearance_columns():
-    columns = {
-        'clearance_officer_name': 'VARCHAR(255) NULL',
-        'clearance_officer_location': 'VARCHAR(255) NULL',
-        'clearance_officer_phone': 'VARCHAR(50) NULL',
-        'approval_date': 'DATE NULL',
-        'entry_date': 'DATE NULL',
-        'shipment_received_at': 'DATETIME NULL',
-        'distribution_time': 'DATETIME NULL',
-    }
-    conn = get_db_connection()
-    cur = conn.cursor()
     try:
-        for column_name, column_def in columns.items():
-            cur.execute(
-                "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=%s AND table_name='customs_declarations' AND column_name=%s",
-                (db_config['database'], column_name)
-            )
-            if cur.fetchone()[0] == 0:
-                cur.execute(f"ALTER TABLE customs_declarations ADD COLUMN {column_name} {column_def}")
-        conn.commit()
-    finally:
-        cur.close()
-        conn.close()
+        columns = {
+            'clearance_officer_name': 'VARCHAR(255) NULL',
+            'clearance_officer_location': 'VARCHAR(255) NULL',
+            'clearance_officer_phone': 'VARCHAR(50) NULL',
+            'approval_date': 'DATE NULL',
+            'entry_date': 'DATE NULL',
+            'shipment_received_at': 'DATETIME NULL',
+            'distribution_time': 'DATETIME NULL',
+        }
+        conn = get_db_connection()
+        cur = conn.cursor()
+        try:
+            for column_name, column_def in columns.items():
+                cur.execute(
+                    "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=%s AND table_name='customs_declarations' AND column_name=%s",
+                    (db_config['database'], column_name)
+                )
+                if cur.fetchone()[0] == 0:
+                    cur.execute(f"ALTER TABLE customs_declarations ADD COLUMN {column_name} {column_def}")
+            conn.commit()
+        finally:
+            cur.close()
+            conn.close()
+    except Exception as exc:
+        print(f"Database warning/error: {exc}")
+        pass
 
 
 def ensure_customs_status_enum():
-    conn = get_db_connection()
-    cur = conn.cursor()
     try:
-        cur.execute("SELECT COLUMN_TYPE FROM information_schema.columns WHERE table_schema=%s AND table_name='customs_declarations' AND column_name='status'", (db_config['database'],))
-        row = cur.fetchone()
-        if not row:
-            return
-        col_type = row[0].upper()
-        required_values = ['DRAFT', 'SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED', 'CLEARED', 'PENDING', 'PROCESSING', 'COMPLETED']
-        if not all(value in col_type for value in required_values):
-            cur.execute("ALTER TABLE customs_declarations MODIFY COLUMN status ENUM('draft','submitted','under_review','approved','rejected','cleared','pending','processing','completed') NOT NULL DEFAULT 'pending'")
-            conn.commit()
-    finally:
-        cur.close()
-        conn.close()
+        conn = get_db_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT COLUMN_TYPE FROM information_schema.columns WHERE table_schema=%s AND table_name='customs_declarations' AND column_name='status'", (db_config['database'],))
+            row = cur.fetchone()
+            if not row:
+                return
+            col_type = row[0].upper()
+            required_values = ['DRAFT', 'SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED', 'CLEARED', 'PENDING', 'PROCESSING', 'COMPLETED']
+            if not all(value in col_type for value in required_values):
+                cur.execute("ALTER TABLE customs_declarations MODIFY COLUMN status ENUM('draft','submitted','under_review','approved','rejected','cleared','pending','processing','completed') NOT NULL DEFAULT 'pending'")
+                conn.commit()
+        finally:
+            cur.close()
+            conn.close()
+    except Exception as exc:
+        print(f"Database warning/error: {exc}")
+        pass
 
 
 @app.route('/customs-management/new', methods=['GET', 'POST'])
