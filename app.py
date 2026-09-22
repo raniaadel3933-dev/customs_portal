@@ -97,13 +97,30 @@ def bootstrap_database_schema(sql_file=None):
             return False
 
         sql_text = sql_file.read_text(encoding='utf-8')
-        for result in cur.execute(sql_text, multi=True):
-            if result is not None and hasattr(result, 'fetchall'):
-                result.fetchall()
-        conn.commit()
+        statements = []
+        for part in sql_text.split(';'):
+            statement = part.strip()
+            if statement:
+                statements.append(statement)
+
+        for statement in statements:
+            try:
+                cur.execute(statement)
+                conn.commit()
+            except Exception as exc:
+                print(f"SQL import warning: {exc}")
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+
         return True
-    except mysql.connector.Error:
-        conn.rollback()
+    except mysql.connector.Error as exc:
+        print(f"SQL import error: {exc}")
+        try:
+            conn.rollback()
+        except Exception:
+            pass
         raise
     finally:
         cur.close()
