@@ -92,7 +92,7 @@ def bootstrap_database_schema(sql_file=None):
         cur.execute('SHOW TABLES')
         tables = {row[0].lower() for row in cur.fetchall()}
 
-        required_tables = {'users', 'items', 'roles', 'permissions'}
+        required_tables = {'users', 'items', 'roles', 'permissions', 'suppliers'}
         if required_tables.issubset(tables):
             return False
 
@@ -383,12 +383,58 @@ def build_department_items_path(department):
     return f"/items/department/{normalized}"
 
 
+def ensure_suppliers_table():
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute("SHOW TABLES LIKE 'suppliers'")
+            if cur.fetchone():
+                return
+        finally:
+            cur.close()
+            conn.close()
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute(
+                """
+                CREATE TABLE suppliers (
+                    id INT NOT NULL AUTO_INCREMENT,
+                    supplier_name VARCHAR(255) NOT NULL,
+                    supplier_code VARCHAR(100) NULL,
+                    phone VARCHAR(100) NULL,
+                    email VARCHAR(255) NULL,
+                    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    PRIMARY KEY (id),
+                    UNIQUE KEY uq_suppliers_code (supplier_code)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                """
+            )
+            conn.commit()
+        except Exception as exc:
+            print(f"Database warning/error: {exc}")
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        finally:
+            cur.close()
+            conn.close()
+    except Exception as exc:
+        print(f"Database warning/error: {exc}")
+        pass
+
+
 def ensure_item_department_column():
     try:
         conn = get_db_connection()
         cur = conn.cursor()
         try:
             cur.execute("SELECT 1 FROM items LIMIT 1")
+            cur.fetchone()
         except Exception as exc:
             print(f"Database warning/error: {exc}")
             return
@@ -403,7 +449,7 @@ def ensure_item_department_column():
         cur = conn.cursor()
         try:
             cur.execute(
-                "ALTER TABLE items ADD COLUMN department VARCHAR(50) NOT NULL DEFAULT 'local_purchases' AFTER item_type"
+                "ALTER TABLE items ADD COLUMN department VARCHAR(255) NOT NULL DEFAULT 'local_purchases' AFTER item_type"
             )
             conn.commit()
         except Exception as exc:
@@ -543,6 +589,7 @@ except Exception as exc:
     print(f"Database bootstrap warning: {exc}")
 
 ensure_item_department_column()
+ensure_suppliers_table()
 ensure_companies_table()
 ensure_issue_voucher_reference_column()
 ensure_department_permissions()

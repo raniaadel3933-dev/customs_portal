@@ -642,6 +642,7 @@ CREATE TABLE `items` (
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `item_type` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `department` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'local_purchases',
   `receipt_no` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `po_number` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `qty` decimal(12,2) DEFAULT '0.00',
@@ -670,6 +671,35 @@ LOCK TABLES `items` WRITE;
 /*!40000 ALTER TABLE `items` DISABLE KEYS */;
 INSERT INTO `items` VALUES (3,1,1,NULL,'ITM001',NULL,'جهاز كمبيوتر',0.00,0.000,NULL,NULL,0.00,0.00,0.0000,1,'2026-05-31 12:30:58','2026-05-31 12:30:58',NULL,NULL,NULL,0.00,0.00,0.00,0.00,0.00),(4,1,1,NULL,'26-1',NULL,'labtop hp',0.00,0.000,NULL,NULL,0.00,0.00,0.0000,1,'2026-05-31 12:44:29','2026-05-31 12:44:29',NULL,NULL,NULL,0.00,0.00,0.00,0.00,0.00),(10,1,1,NULL,'236',NULL,'كاب باسم',0.00,0.000,NULL,NULL,0.00,0.00,0.0000,1,'2026-05-31 13:13:51','2026-05-31 13:16:33',NULL,NULL,NULL,0.00,0.00,0.00,0.00,0.00),(13,1,1,NULL,'2026',NULL,'كورة قدم باسم',3000.00,2000.000,NULL,NULL,0.00,0.00,0.0000,1,'2026-05-31 13:59:53','2026-05-31 13:59:53',NULL,NULL,NULL,0.00,0.00,0.00,0.00,0.00),(22,1,1,NULL,'26-9',NULL,'كورة قدم باسمتا',300.01,20.000,NULL,NULL,0.00,0.00,0.0000,1,'2026-05-31 14:11:33','2026-05-31 14:27:37',NULL,NULL,NULL,0.00,0.00,0.00,0.00,0.00),(24,1,1,NULL,'26-31',NULL,'موبايل',0.00,6.000,NULL,NULL,0.00,0.00,0.0000,1,'2026-05-31 15:42:34','2026-05-31 15:42:34','مخزون','2-2026','2-2026',3.00,130.00,100.00,430.00,0.00),(27,1,5,NULL,'26-333',NULL,'موبايل',6500.00,7.000,NULL,NULL,0.00,0.00,0.0000,1,'2026-05-31 15:44:08','2026-05-31 15:44:08','مخزون','2-2026','2-2026',6.00,500.00,1000.00,6500.00,0.00),(30,1,1,NULL,'26-189',NULL,'كاميرات واي فاي',1500.00,1.000,NULL,NULL,0.00,0.00,0.0000,1,'2026-05-31 17:08:47','2026-05-31 17:08:47','مخزون','1-2026','1-2026',60.00,0.00,150.00,9000.00,0.00),(31,1,1,NULL,'26-40',NULL,'لاب توب توشيبا مستعمل',6700.00,1.500,NULL,NULL,0.00,0.00,0.0000,1,'2026-05-31 17:54:21','2026-05-31 17:54:21','مستعمل','1-2024','2-2024',1.00,150.00,6400.00,6550.00,0.00);
 /*!40000 ALTER TABLE `items` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `suppliers`
+--
+
+DROP TABLE IF EXISTS `suppliers`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `suppliers` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `supplier_name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `supplier_code` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `phone` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `email` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_suppliers_code` (`supplier_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `suppliers`
+--
+
+LOCK TABLES `suppliers` WRITE;
+/*!40000 ALTER TABLE `suppliers` DISABLE KEYS */;
+/*!40000 ALTER TABLE `suppliers` ENABLE KEYS */;
 UNLOCK TABLES;
 
 --
